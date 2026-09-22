@@ -2,7 +2,7 @@ package com.khwaish.job_scheduler;
 
 import com.khwaish.job_scheduler.model.Job;
 import com.khwaish.job_scheduler.repository.JobRepository;
-import com.khwaish.job_scheduler.worker.JobWorker;
+import com.khwaish.job_scheduler.worker.JobClaimService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +21,7 @@ public class JobWorkerConcurrencyTest {
     private JobRepository jobRepository;
 
     @Autowired
-    private JobWorker jobWorker;
+    private JobClaimService jobClaimService;
 
     @BeforeEach
     void cleanUp() {
@@ -47,7 +47,7 @@ public class JobWorkerConcurrencyTest {
 
         for (int i = 0; i < numberOfThreads; i++) {
             new Thread(() -> {
-                Long claimedJobId = jobWorker.claimNextJob();
+                Long claimedJobId = jobClaimService.claimNextJob("test-worker");
                 if (savedJob.getId().equals(claimedJobId)) {
                     successCount.incrementAndGet();
                 }
