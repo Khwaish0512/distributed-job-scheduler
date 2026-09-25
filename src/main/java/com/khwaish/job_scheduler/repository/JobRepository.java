@@ -34,4 +34,15 @@ public interface JobRepository extends JpaRepository<Job, Long> {
         WHERE j.id = :jobId
         """)
     void markJobAsRunning(@Param("jobId") Long jobId, @Param("workerId") String workerId);
+
+    @Modifying
+    @Query("""
+    UPDATE Job j
+    SET j.status = CASE WHEN j.attempts >= j.maxAttempts THEN 'DEAD' ELSE 'PENDING' END,
+        j.lockedBy = NULL,
+        j.updatedAt = CURRENT_TIMESTAMP
+    WHERE j.status = 'RUNNING'
+    AND j.lastHeartbeat < :staleThreshold
+    """)
+    int reclaimStaleJobs(@Param("staleThreshold") LocalDateTime staleThreshold);
 }
