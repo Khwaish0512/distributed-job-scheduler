@@ -45,4 +45,18 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     AND j.lastHeartbeat < :staleThreshold
     """)
     int reclaimStaleJobs(@Param("staleThreshold") LocalDateTime staleThreshold);
+
+    @Modifying
+    @Query("""
+    UPDATE Job j
+    SET j.status = CASE WHEN j.attempts >= j.maxAttempts THEN 'DEAD' ELSE 'PENDING' END,
+        j.scheduledAt = :nextAttemptAt,
+        j.lockedBy = NULL,
+        j.errorMessage = :errorMessage,
+        j.updatedAt = CURRENT_TIMESTAMP
+    WHERE j.id = :jobId
+    """)
+    void markJobFailed(@Param("jobId") Long jobId,
+                       @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
+                       @Param("errorMessage") String errorMessage);
 }

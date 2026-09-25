@@ -28,4 +28,9 @@ public class JobClaimService {
         jobRepository.markJobAsRunning(jobId, workerId);
         return jobId;
     }
+
+    @Transactional
+    public void markJobFailed(Long jobId, LocalDateTime nextAttemptAt, String errorMessage) {
+        jobRepository.markJobFailed(jobId, nextAttemptAt, errorMessage);
+    }
 }

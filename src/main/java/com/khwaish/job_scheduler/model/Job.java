@@ -46,4 +46,7 @@ public class Job {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    @Column(columnDefinition = "TEXT")
+    private String errorMessage;
 }
