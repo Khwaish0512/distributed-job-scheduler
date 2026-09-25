@@ -30,7 +30,14 @@ public class JobClaimService {
     }
 
     @Transactional
-    public void markJobFailed(Long jobId, LocalDateTime nextAttemptAt, String errorMessage) {
-        jobRepository.markJobFailed(jobId, nextAttemptAt, errorMessage);
+    public boolean markJobCompleted(Long jobId, String workerId) {
+        int rowsUpdated = jobRepository.markJobCompleted(jobId, workerId);
+        return rowsUpdated > 0;
+    }
+
+    @Transactional
+    public boolean markJobFailed(Long jobId, String workerId, LocalDateTime nextAttemptAt, String errorMessage) {
+        int rowsUpdated = jobRepository.markJobFailed(jobId, workerId, nextAttemptAt, errorMessage);
+        return rowsUpdated > 0;
     }
 }

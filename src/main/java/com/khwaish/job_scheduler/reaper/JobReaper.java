@@ -16,7 +16,7 @@ public class JobReaper {
     @Value("${scheduler.polling.enabled:true}")
     private boolean reaperEnabled;
 
-    private static final int STALE_THRESHOLD_SECONDS = 5;
+    private static final int STALE_THRESHOLD_SECONDS = 15;
 
     public JobReaper(JobRepository jobRepository) {
         this.jobRepository = jobRepository;

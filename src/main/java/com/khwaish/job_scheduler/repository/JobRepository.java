@@ -59,4 +59,31 @@ public interface JobRepository extends JpaRepository<Job, Long> {
     void markJobFailed(@Param("jobId") Long jobId,
                        @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
                        @Param("errorMessage") String errorMessage);
+
+    @Modifying
+    @Query("""
+    UPDATE Job j
+    SET j.status = 'COMPLETED',
+        j.updatedAt = CURRENT_TIMESTAMP
+    WHERE j.id = :jobId
+    AND j.lockedBy = :workerId
+    AND j.status = 'RUNNING'
+    """)
+    int markJobCompleted(@Param("jobId") Long jobId, @Param("workerId") String workerId);
+
+    @Modifying
+    @Query("""
+    UPDATE Job j
+    SET j.status = CASE WHEN j.attempts >= j.maxAttempts THEN 'DEAD' ELSE 'PENDING' END,
+        j.scheduledAt = :nextAttemptAt,
+        j.lockedBy = NULL,
+        j.errorMessage = :errorMessage,
+        j.updatedAt = CURRENT_TIMESTAMP
+    WHERE j.id = :jobId
+    AND j.lockedBy = :workerId
+    """)
+    int markJobFailed(@Param("jobId") Long jobId,
+                      @Param("workerId") String workerId,
+                      @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
+                      @Param("errorMessage") String errorMessage);
 }

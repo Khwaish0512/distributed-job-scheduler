@@ -46,12 +46,13 @@ public class JobWorker {
         try {
             executeJob(jobId);
 
-            Job job = jobRepository.findById(jobId).orElseThrow();
-            job.setStatus("COMPLETED");
-            job.setUpdatedAt(LocalDateTime.now());
-            jobRepository.save(job);
+            boolean stillOwned = jobClaimService.markJobCompleted(jobId, workerId);
 
-            System.out.println("[Worker " + workerId + "] Completed job id=" + jobId);
+            if (stillOwned) {
+                System.out.println("[Worker " + workerId + "] Completed job id=" + jobId);
+            } else {
+                System.out.println("[Worker " + workerId + "] Finished job id=" + jobId + ", but ownership was lost (likely reclaimed by reaper) — not marking completed to avoid double-processing conflicts.");
+            }
 
         } catch (Exception e) {
             handleFailure(jobId, e);
@@ -68,7 +69,6 @@ public class JobWorker {
             Thread.sleep(1000);
         }
 
-        // Deliberate failure hook for testing: any job submitted with this taskType always fails
         if ("SIMULATE_FAILURE".equals(job.getTaskType())) {
             throw new RuntimeException("Simulated failure for testing retries/DLQ");
         }
@@ -84,7 +84,12 @@ public class JobWorker {
         LocalDateTime nextAttemptAt = LocalDateTime.now().plusSeconds(backoffSeconds);
         String errorMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
 
-        jobClaimService.markJobFailed(jobId, nextAttemptAt, errorMessage);
+        boolean stillOwned = jobClaimService.markJobFailed(jobId, workerId, nextAttemptAt, errorMessage);
+
+        if (!stillOwned) {
+            System.out.println("[Worker " + workerId + "] Job id=" + jobId + " failed, but ownership was already lost — skipping failure update.");
+            return;
+        }
 
         if (attempts >= maxAttempts) {
             System.out.println("[Worker " + workerId + "] Job id=" + jobId + " exhausted all " + maxAttempts + " attempts. Moved to DEAD. Error: " + errorMessage);
@@ -94,8 +99,8 @@ public class JobWorker {
     }
 
     private long calculateBackoffSeconds(int attempts) {
-        long base = (long) Math.pow(2, attempts - 1) * 5; // 5s, 10s, 20s, 40s...
-        long jitter = ThreadLocalRandom.current().nextLong(0, 3); // 0-2 extra seconds
+        long base = (long) Math.pow(2, attempts - 1) * 5;
+        long jitter = ThreadLocalRandom.current().nextLong(0, 3);
         return base + jitter;
     }
 
