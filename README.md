@@ -1,3 +1,6 @@
+
+
+Readme · MD
 # Distributed Fault-Tolerant Job Scheduler
 
 A multi-worker background job orchestration system built in Java/Spring Boot, designed to safely run scheduled and one-off tasks across multiple independent server instances — without duplicate execution, and with automatic recovery from worker crashes.
@@ -19,6 +22,31 @@ A naive scheduled-task setup (e.g., Spring's `@Scheduled` alone) breaks the mome
 ## Architecture
 
 A client submits a job over the REST API, which is written to MySQL with status `PENDING`. Every worker instance — each running in its own independent container — polls the database on a fixed interval and attempts to atomically claim the next eligible job using `SELECT ... FOR UPDATE SKIP LOCKED`. Because this claim happens inside a single database transaction, MySQL itself guarantees that when several workers poll at the same moment, exactly one of them succeeds in claiming any given job; the others either skip it and grab a different one, or find nothing available.
+
+```mermaid
+flowchart TD
+    Client([Client]) -->|POST /api/jobs| API[REST API]
+    API -->|INSERT status=PENDING| DB[(MySQL: jobs table)]
+ 
+    DB -->|SELECT FOR UPDATE SKIP LOCKED| W1[Worker 1]
+    DB -->|SELECT FOR UPDATE SKIP LOCKED| W2[Worker 2]
+    DB -->|SELECT FOR UPDATE SKIP LOCKED| W3[Worker N]
+ 
+    W1 -->|heartbeat every 1s| Redis[(Redis: heartbeat keys)]
+    W1 -->|last_heartbeat update| DB
+    W2 -->|heartbeat every 1s| Redis
+    W2 -->|last_heartbeat update| DB
+ 
+    W1 -->|success| Completed[status=COMPLETED]
+    W1 -->|exception| Retry{attempts < maxAttempts?}
+    Retry -->|yes| Pending[status=PENDING, backoff+jitter delay]
+    Retry -->|no| Dead[status=DEAD, error saved]
+ 
+    Pending -.->|picked up again later| DB
+ 
+    Reaper[Reaper - runs every 5s on every instance] -->|scans for stale heartbeats| DB
+    Reaper -->|resets RUNNING to PENDING or DEAD| DB
+```
 
 Once a worker claims a job, it moves the job to `RUNNING` and begins processing. While the task executes, the worker sends a heartbeat — both a short-lived key in Redis and a timestamp column in MySQL — roughly once per second, signaling "I am still alive and working on this." A separate, independent process called the Reaper runs on every instance every five seconds and scans for jobs stuck in `RUNNING` whose heartbeat has gone stale. If it finds one, it assumes the worker that claimed it has crashed or been killed, and resets the job back to `PENDING` so a healthy worker can pick it up — or moves it to `DEAD` if it has already exhausted its retry attempts.
 
@@ -87,7 +115,7 @@ This starts MySQL, Redis, and two independent worker containers (ports 8080 and 
 ```bash
 POST http://localhost:8080/api/jobs
 Content-Type: application/json
-
+ 
 {
   "idempotencyKey": "example-001",
   "taskType": "SEND_EMAIL",
@@ -123,3 +151,4 @@ mvn test -Dtest=JobWorkerConcurrencyTest
 - A load-testing harness that injects thousands of concurrent job submissions to measure real throughput and confirm zero duplicates at scale
 - Prometheus and Grafana dashboards built on top of the existing Micrometer metrics
 - Externalized secrets — database credentials currently live in `docker-compose.yml` for local development simplicity, and would move to environment-specific secret management in a real deployment
+ 
