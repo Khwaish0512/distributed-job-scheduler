@@ -19,6 +19,8 @@ public class CreateJobRequest {
 
     private Integer priority = 0;
 
+    private Integer maxAttempts = 3;
+
     @NotNull(message = "scheduledAt is required")
     private LocalDateTime scheduledAt;
 }

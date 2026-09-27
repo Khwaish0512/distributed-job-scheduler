@@ -1,6 +1,7 @@
 package com.khwaish.job_scheduler.worker;
 
 import com.khwaish.job_scheduler.heartbeat.HeartbeatService;
+import com.khwaish.job_scheduler.metrics.JobMetrics;
 import com.khwaish.job_scheduler.model.Job;
 import com.khwaish.job_scheduler.repository.JobRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,15 +17,17 @@ public class JobWorker {
     private final JobRepository jobRepository;
     private final HeartbeatService heartbeatService;
     private final JobClaimService jobClaimService;
+    private final JobMetrics jobMetrics;
     private final String workerId = "worker-" + System.currentTimeMillis();
 
     @Value("${scheduler.polling.enabled:true}")
     private boolean pollingEnabled;
 
-    public JobWorker(JobRepository jobRepository, HeartbeatService heartbeatService, JobClaimService jobClaimService) {
+    public JobWorker(JobRepository jobRepository, HeartbeatService heartbeatService, JobClaimService jobClaimService, JobMetrics jobMetrics) {
         this.jobRepository = jobRepository;
         this.heartbeatService = heartbeatService;
         this.jobClaimService = jobClaimService;
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(fixedDelay = 2000)
@@ -49,9 +52,10 @@ public class JobWorker {
             boolean stillOwned = jobClaimService.markJobCompleted(jobId, workerId);
 
             if (stillOwned) {
+                jobMetrics.incrementCompleted();
                 System.out.println("[Worker " + workerId + "] Completed job id=" + jobId);
             } else {
-                System.out.println("[Worker " + workerId + "] Finished job id=" + jobId + ", but ownership was lost (likely reclaimed by reaper) — not marking completed to avoid double-processing conflicts.");
+                System.out.println("[Worker " + workerId + "] Finished job id=" + jobId + ", but ownership was lost — not marking completed.");
             }
 
         } catch (Exception e) {
@@ -91,7 +95,10 @@ public class JobWorker {
             return;
         }
 
+        jobMetrics.incrementFailed();
+
         if (attempts >= maxAttempts) {
+            jobMetrics.incrementDead();
             System.out.println("[Worker " + workerId + "] Job id=" + jobId + " exhausted all " + maxAttempts + " attempts. Moved to DEAD. Error: " + errorMessage);
         } else {
             System.out.println("[Worker " + workerId + "] Job id=" + jobId + " failed (attempt " + attempts + "/" + maxAttempts + "). Retrying in " + backoffSeconds + "s. Error: " + errorMessage);
@@ -108,5 +115,10 @@ public class JobWorker {
         Job job = jobRepository.findById(jobId).orElseThrow();
         job.setLastHeartbeat(LocalDateTime.now());
         jobRepository.save(job);
+    }
+
+    @Scheduled(fixedDelay = 3000)
+    public void sendPresenceHeartbeat() {
+        heartbeatService.sendHeartbeat(workerId);
     }
 }

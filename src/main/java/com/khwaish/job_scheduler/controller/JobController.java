@@ -35,6 +35,7 @@ public class JobController {
         job.setTaskType(request.getTaskType());
         job.setPayload(request.getPayload());
         job.setPriority(request.getPriority());
+        job.setMaxAttempts(request.getMaxAttempts());
         job.setScheduledAt(request.getScheduledAt());
         job.setStatus("PENDING");
         job.setCreatedAt(LocalDateTime.now());
