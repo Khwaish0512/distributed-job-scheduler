@@ -86,4 +86,7 @@ public interface JobRepository extends JpaRepository<Job, Long> {
                       @Param("workerId") String workerId,
                       @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
                       @Param("errorMessage") String errorMessage);
+
+    @Query("SELECT COUNT(j) FROM Job j WHERE j.status = :status")
+    long countByStatus(@Param("status") String status);
 }

@@ -98,7 +98,6 @@ public class JobWorker {
         jobMetrics.incrementFailed();
 
         if (attempts >= maxAttempts) {
-            jobMetrics.incrementDead();
             System.out.println("[Worker " + workerId + "] Job id=" + jobId + " exhausted all " + maxAttempts + " attempts. Moved to DEAD. Error: " + errorMessage);
         } else {
             System.out.println("[Worker " + workerId + "] Job id=" + jobId + " failed (attempt " + attempts + "/" + maxAttempts + "). Retrying in " + backoffSeconds + "s. Error: " + errorMessage);
